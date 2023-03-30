@@ -108,7 +108,8 @@ func (o Opts) Float64(key string) (f float64, err error) {
 // named field (as above).
 //
 // Bind also handles conversion to bool, float, int or string types.
-func (o Opts) Bind(v interface{}) error {
+
+func (o Opts) BindOld(v interface{}) error {
 	structVal := reflect.ValueOf(v)
 	if structVal.Kind() != reflect.Ptr {
 		return newError("'v' argument is not pointer to struct type")
@@ -222,6 +223,133 @@ func (o Opts) Bind(v interface{}) error {
 	}
 
 	return nil
+}
+
+func (o Opts) Bind(v interface{}) error {
+	val := reflect.ValueOf(v)
+
+	if val.Kind() != reflect.Ptr {
+		return newError("'v' argument is not pointer to struct type")
+	}
+	for val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct {
+		return newError("'v' argument is not pointer to struct type")
+	}
+
+	for k, v := range o {
+
+		ok, err := o.assignTo(val, k, v)
+		if !ok {
+			if k == "--help" || k == "--version" { // Don't require these to be mapped.
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			return newError("mapping of %q is not found in given struct, or is an unexported field", k)
+		}
+	}
+
+	return nil
+}
+
+func (o Opts) assignTo(sval reflect.Value, key string, val interface{}) (bool, error) {
+
+	assign_value := func(sval reflect.Value, field reflect.StructField, key string, v interface{}) error {
+
+		zeroVal := reflect.Zero(sval.Type())
+		if !reflect.DeepEqual(sval.Interface(), zeroVal.Interface()) {
+			return newError("%q field is non-zero, will be overwritten by value of %q", field.Name, key)
+		}
+
+		if !reflect.DeepEqual(sval.Interface(), reflect.Zero(sval.Type()).Interface()) {
+			// The struct's field is already non-zero (by our doing), so don't change it.
+			// This happens with comma separated tags, e.g. `docopt:"-h,--help"` which is a
+			// convenient way of checking if one of multiple boolean flags are set.
+			return nil
+		}
+		optVal := reflect.ValueOf(v)
+		// Option value is the zero Value, so we can't get its .Type(). No need to assign anyway, so move along.
+		if !optVal.IsValid() {
+			return nil
+		}
+		if !sval.CanSet() {
+			return newError("%q field cannot be set", sval.Type().Name())
+		}
+		// Try to assign now if able. bool and string values should be assignable already.
+		if optVal.Type().AssignableTo(sval.Type()) {
+			sval.Set(optVal)
+			return nil
+		}
+		// Try to convert the value and assign if able.
+		switch sval.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			if x, err := o.Int(key); err == nil {
+				sval.SetInt(int64(x))
+				return nil
+			}
+		case reflect.Float32, reflect.Float64:
+			if x, err := o.Float64(key); err == nil {
+				sval.SetFloat(x)
+				return nil
+			}
+		}
+		// TODO: Something clever (recursive?) with non-string slices.
+		// case reflect.Slice:
+		// 	if optVal.Kind() == reflect.Slice {
+		// 		for i := 0; i < optVal.Len(); i++ {
+		// 			sliceVal := optVal.Index(i)
+		// 			fmt.Printf("%v", sliceVal)
+		// 		}
+		// 		fmt.Printf("\n")
+		// 	}
+		return newError("value of %q is not assignable to %q field", key, field.Name)
+
+	}
+
+	for sval.Kind() == reflect.Ptr {
+		sval = sval.Elem()
+	}
+
+	stype := sval.Type()
+	for i := 0; i < stype.NumField(); i++ {
+		field := stype.Field(i)
+		if isUnexportedField(field) {
+			continue
+		}
+		if field.Anonymous {
+			ok, err := o.assignTo(sval.Field(i), key, val)
+			if err != nil {
+				return false, err
+			}
+			if ok {
+				return true, nil
+			}
+		}
+		tags := field.Tag.Get("docopt")
+		if tags == "" {
+			if guessUntaggedField(key) == field.Name {
+				if err := assign_value(sval.Field(i), field, key, val); err != nil {
+					return false, err
+				}
+				return true, nil
+			}
+		} else {
+			for _, tag := range strings.Split(tags, ",") {
+				if tag == key {
+					if err := assign_value(sval.Field(i), field, key, val); err != nil {
+						return false, err
+					}
+					return true, nil
+				}
+			}
+		}
+
+	}
+
+	return false, nil
 }
 
 // isUnexportedField returns whether the field is unexported.
