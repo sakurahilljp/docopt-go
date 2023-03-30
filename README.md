@@ -3,7 +3,7 @@ docopt-go
 
 [![Build Status](https://travis-ci.org/docopt/docopt.go.svg?branch=master)](https://travis-ci.org/docopt/docopt.go)
 [![Coverage Status](https://coveralls.io/repos/github/docopt/docopt.go/badge.svg)](https://coveralls.io/github/docopt/docopt.go)
-[![GoDoc](https://godoc.org/github.com/docopt/docopt.go?status.svg)](https://godoc.org/github.com/docopt/docopt.go)
+[![GoDoc](https://godoc.org/github.com/sakurahilljp/docopt.go?status.svg)](https://godoc.org/github.com/sakurahilljp/docopt.go)
 
 An implementation of [docopt](http://docopt.org/) in the [Go](http://golang.org/) programming language.
 
@@ -14,7 +14,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/docopt/docopt-go"
+	"github.com/sakurahilljp/docopt-go"
 )
 
 func main() {
@@ -47,18 +47,18 @@ Options:
 ⚠ Use the alias "docopt-go". To use docopt in your Go code:
 
 ```go
-import "github.com/docopt/docopt-go"
+import "github.com/sakurahilljp/docopt-go"
 ```
 
 To install docopt in your `$GOPATH`:
 
 ```console
-$ go get github.com/docopt/docopt-go
+$ go get github.com/sakurahilljp/docopt-go
 ```
 
 ## API
 
-Given a conventional command-line help message, docopt processes the arguments. See https://github.com/docopt/docopt#help-message-format for a description of the help message format.
+Given a conventional command-line help message, docopt processes the arguments. See https://github.com/sakurahilljp/docopt#help-message-format for a description of the help message format.
 
 This package exposes three different APIs, depending on the level of control required. The first, simplest way to parse your docopt usage is to just call:
 
@@ -103,7 +103,7 @@ var config struct {
 opts.Bind(&config)
 ```
 
-More documentation is available at [godoc.org](https://godoc.org/github.com/docopt/docopt-go).
+More documentation is available at [godoc.org](https://godoc.org/github.com/sakurahilljp/docopt-go).
 
 ## Unit Testing
 
