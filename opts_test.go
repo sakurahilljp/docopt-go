@@ -336,3 +336,39 @@ func TestBindHyphenatedTags(t *testing.T) {
 		t.Fail()
 	}
 }
+
+type LogOption struct {
+	LogLevel string `docopt:"--loglevel"`
+}
+
+type EmbeddedOption struct {
+	LogOption
+	Tag   string `docopt:"--tag"`
+	Untag string
+}
+
+func TestBindingAnonymousStruct(t *testing.T) {
+
+	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
+	opts, err := testParser.ParseArgs("Usage: prog --tag=TAG --loglevel=LEVEL --untag=UNTAG",
+		[]string{"--loglevel", "DEBUG", "--tag", "TAG", "--untag", "UNTAG"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := EmbeddedOption{
+		LogOption: LogOption{LogLevel: "DEBUG"},
+		Tag:       "TAG",
+		Untag:     "UNTAG",
+	}
+
+	var opt EmbeddedOption
+
+	if err := opts.Bind(&opt); err != nil {
+		t.Fatal(err)
+	}
+
+	if reflect.DeepEqual(opt, expected) != true {
+		t.Errorf("result: %#v expect: %#v\n", opt, expected)
+	}
+}
