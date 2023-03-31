@@ -1,21 +1,22 @@
 package docopt
 
 import (
-	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"golang.org/x/xerrors"
 )
 
 func errKey(key string) error {
-	return fmt.Errorf("no such key: %q", key)
+	return xerrors.Errorf("no such key: %q", key)
 }
 func errType(key string) error {
-	return fmt.Errorf("key: %q failed type conversion", key)
+	return xerrors.Errorf("key: %q failed type conversion", key)
 }
 func errStrconv(key string, convErr error) error {
-	return fmt.Errorf("key: %q failed type conversion: %s", key, convErr)
+	return xerrors.Errorf("key: %q failed type conversion: %s", key, convErr)
 }
 
 // Opts is a map of command line options to their values, with some convenience

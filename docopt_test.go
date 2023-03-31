@@ -17,6 +17,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"golang.org/x/xerrors"
 )
 
 var testParser = &Parser{HelpHandler: NoHelpHandler}
@@ -1481,7 +1483,7 @@ func parseTest(raw []byte) ([]testcase, error) {
 				}
 				res = append(res, testcase{id, doc, prog, argv, expect, false})
 			default:
-				return nil, fmt.Errorf("unhandled json data type")
+				return nil, xerrors.Errorf("unhandled json data type")
 			}
 			id++
 		}

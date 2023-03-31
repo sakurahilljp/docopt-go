@@ -2,6 +2,8 @@ package docopt
 
 import (
 	"fmt"
+
+	"golang.org/x/xerrors"
 )
 
 type errorType int
@@ -46,4 +48,4 @@ func newLanguageError(msg string, f ...interface{}) error {
 	return &LanguageError{fmt.Sprintf(msg, f...)}
 }
 
-var newError = fmt.Errorf
+var newError = xerrors.Errorf
