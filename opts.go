@@ -1,29 +1,30 @@
 package docopt
 
 import (
-	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"golang.org/x/xerrors"
 )
 
 func errKey(key string) error {
-	return fmt.Errorf("no such key: %q", key)
+	return xerrors.Errorf("no such key: %q", key)
 }
 func errType(key string) error {
-	return fmt.Errorf("key: %q failed type conversion", key)
+	return xerrors.Errorf("key: %q failed type conversion", key)
 }
 func errStrconv(key string, convErr error) error {
-	return fmt.Errorf("key: %q failed type conversion: %s", key, convErr)
+	return xerrors.Errorf("key: %q failed type conversion: %s", key, convErr)
 }
 
 // Opts is a map of command line options to their values, with some convenience
 // methods for value type conversion (bool, float64, int, string). For example,
 // to get an option value as an int:
 //
-//   opts, _ := docopt.ParseDoc("Usage: sleep <seconds>")
-//   secs, _ := opts.Int("<seconds>")
+//	opts, _ := docopt.ParseDoc("Usage: sleep <seconds>")
+//	secs, _ := opts.Int("<seconds>")
 //
 // Additionally, Opts.Bind allows you easily populate a struct's fields with the
 // values of each option value. See below for examples.
@@ -31,9 +32,9 @@ func errStrconv(key string, convErr error) error {
 // Lastly, you can still treat Opts as a regular map, and do any type checking
 // and conversion that you want to yourself. For example:
 //
-//   if s, ok := opts["<binary>"].(string); ok {
-//     if val, err := strconv.ParseUint(s, 2, 64); err != nil { ... }
-//   }
+//	if s, ok := opts["<binary>"].(string); ok {
+//	  if val, err := strconv.ParseUint(s, 2, 64); err != nil { ... }
+//	}
 //
 // Note that any non-boolean option / flag will have a string value in the
 // underlying map.
@@ -238,6 +239,11 @@ func (o Opts) Bind(v interface{}) error {
 		return newError("'v' argument is not pointer to struct type")
 	}
 
+	// Pre-check that option keys are mapped to fields and fields are zero valued, before populating them.
+	if err := o.preCheck(val); err != nil {
+		return err
+	}
+
 	for k, v := range o {
 
 		ok, err := o.assignTo(val, k, v)
@@ -255,14 +261,38 @@ func (o Opts) Bind(v interface{}) error {
 	return nil
 }
 
+func (o Opts) preCheck(sval reflect.Value) error {
+
+	for sval.Kind() == reflect.Ptr {
+		sval = sval.Elem()
+	}
+
+	stype := sval.Type()
+	for i := 0; i < stype.NumField(); i++ {
+		field := stype.Field(i)
+		if isUnexportedField(field) {
+			continue
+		}
+		if field.Anonymous {
+			err := o.preCheck(sval.Field(i))
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		zeroVal := reflect.Zero(sval.Field(i).Type())
+		if !reflect.DeepEqual(sval.Field(i).Interface(), zeroVal.Interface()) {
+			return newError("%q field is non-zero, will be overwritten", field.Name)
+		}
+	}
+
+	return nil
+}
+
 func (o Opts) assignTo(sval reflect.Value, key string, val interface{}) (bool, error) {
 
 	assign_value := func(sval reflect.Value, field reflect.StructField, key string, v interface{}) error {
-
-		zeroVal := reflect.Zero(sval.Type())
-		if !reflect.DeepEqual(sval.Interface(), zeroVal.Interface()) {
-			return newError("%q field is non-zero, will be overwritten by value of %q", field.Name, key)
-		}
 
 		if !reflect.DeepEqual(sval.Interface(), reflect.Zero(sval.Type()).Interface()) {
 			// The struct's field is already non-zero (by our doing), so don't change it.
@@ -355,8 +385,9 @@ func (o Opts) assignTo(sval reflect.Value, key string, val interface{}) (bool, e
 // isUnexportedField returns whether the field is unexported.
 // isUnexportedField is to avoid the bug in versions older than Go1.3.
 // See following links:
-//   https://code.google.com/p/go/issues/detail?id=7247
-//   http://golang.org/ref/spec#Exported_identifiers
+//
+//	https://code.google.com/p/go/issues/detail?id=7247
+//	http://golang.org/ref/spec#Exported_identifiers
 func isUnexportedField(field reflect.StructField) bool {
 	return !(field.PkgPath == "" && unicode.IsUpper(rune(field.Name[0])))
 }
