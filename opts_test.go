@@ -372,3 +372,34 @@ func TestBindingAnonymousStruct(t *testing.T) {
 		t.Errorf("result: %#v expect: %#v\n", opt, expected)
 	}
 }
+
+type MultipleTags struct {
+	Multi bool `docopt:"publish,pub"`
+}
+
+func TestBindingMultipleTags(t *testing.T) {
+	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
+
+	tags := []string{"pub", "publish"}
+	for _, tag := range tags {
+		opts, err := testParser.ParseArgs("Usage: prog (publish|pub)",
+			[]string{tag}, "")
+		if err != nil {
+			t.Fatal(tag, err)
+		}
+
+		expected := MultipleTags{
+			Multi: true,
+		}
+
+		var s MultipleTags
+
+		if err := opts.Bind(&s); err != nil {
+			t.Fatal(tag, err)
+		}
+
+		if reflect.DeepEqual(s, expected) != true {
+			t.Errorf("result: %#v expect: %#v\n", s, expected)
+		}
+	}
+}
