@@ -591,3 +591,30 @@ func TestBindingOptionalArguments(t *testing.T) {
 		t.Errorf("Bind result mismatch (present optionals):\n Got: %#v\nWant: %#v", actualPresent, expectedPresent)
 	}
 }
+
+// Test binding to a struct field that is a pointer.
+func TestBindToPointerField(t *testing.T) {
+	type PointerConfig struct {
+		Name *string `docopt:"--name"`
+	}
+
+	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
+	usage := `Usage: mytool --name=NAME`
+	argv := []string{"--name", "test"}
+
+	opts, err := testParser.ParseArgs(usage, argv, "")
+	if err != nil {
+		t.Fatalf("ParseArgs failed: %v", err)
+	}
+
+	var actual PointerConfig
+	err = opts.Bind(&actual)
+	if err == nil {
+		t.Fatal("Expected an error when binding to a pointer field, but got nil")
+	}
+
+	expectedError := `A pointer field is not supported: "Name".`
+	if err.Error() != expectedError {
+		t.Errorf("Expected error %q, but got %q", expectedError, err.Error())
+	}
+}
