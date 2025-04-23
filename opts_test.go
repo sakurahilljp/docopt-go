@@ -337,17 +337,17 @@ func TestBindHyphenatedTags(t *testing.T) {
 	}
 }
 
-type LogOption struct {
-	LogLevel string `docopt:"--loglevel"`
-}
-
-type EmbeddedOption struct {
-	LogOption
-	Tag   string `docopt:"--tag"`
-	Untag string
-}
-
 func TestBindingAnonymousStruct(t *testing.T) {
+
+	type LogOption struct {
+		LogLevel string `docopt:"--loglevel"`
+	}
+
+	type EmbeddedOption struct {
+		LogOption
+		Tag   string `docopt:"--tag"`
+		Untag string
+	}
 
 	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
 	opts, err := testParser.ParseArgs("Usage: prog --tag=TAG --loglevel=LEVEL --untag=UNTAG",
@@ -373,11 +373,12 @@ func TestBindingAnonymousStruct(t *testing.T) {
 	}
 }
 
-type MultipleTags struct {
-	Multi bool `docopt:"publish,pub"`
-}
-
 func TestBindingMultipleTags(t *testing.T) {
+
+	type MultipleTags struct {
+		Multi bool `docopt:"publish,pub"`
+	}
+
 	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
 
 	tags := []string{"pub", "publish"}
@@ -401,5 +402,219 @@ func TestBindingMultipleTags(t *testing.T) {
 		if reflect.DeepEqual(s, expected) != true {
 			t.Errorf("result: %#v expect: %#v\n", s, expected)
 		}
+	}
+}
+
+func TestBindingMultiLevelAnonymousStruct(t *testing.T) {
+
+	type NetworkOptions struct {
+		Port int `docopt:"--port"` // Tagged field in innermost struct
+	}
+
+	type ServiceOptions struct {
+		NetworkOptions        // Embed NetworkOptions
+		ServiceName    string // Auto-mapped field in middle struct (--service-name)
+	}
+
+	type AppConfig struct {
+		ServiceOptions        // Embed ServiceOptions
+		Verbose        bool   `docopt:"-v"`       // Tagged field in outermost struct
+		ConfigFile     string `docopt:"--config"` // Tagged field in outermost struct
+		AppName        string // Auto-mapped field in outermost struct (--app-name)
+	}
+
+	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
+	usage := `Usage: myapp [-v] --port=PORT --service-name=NAME --config=FILE --app-name=APPNAME`
+	argv := []string{
+		"-v",
+		"--port", "8080",
+		"--service-name", "auth-service",
+		"--config", "/etc/myapp.conf",
+		"--app-name", "MyApplication",
+	}
+
+	opts, err := testParser.ParseArgs(usage, argv, "")
+	if err != nil {
+		t.Fatalf("ParseArgs failed: %v", err)
+	}
+
+	expected := AppConfig{
+		ServiceOptions: ServiceOptions{
+			NetworkOptions: NetworkOptions{
+				Port: 8080,
+			},
+			ServiceName: "auth-service",
+		},
+		Verbose:    true,
+		ConfigFile: "/etc/myapp.conf",
+		AppName:    "MyApplication",
+	}
+
+	var actual AppConfig
+	if err := opts.Bind(&actual); err != nil {
+		t.Fatalf("Bind failed: %v", err)
+	}
+
+	if !reflect.DeepEqual(actual, expected) {
+		t.Errorf("Bind result mismatch:\n Got: %#v\nWant: %#v", actual, expected)
+	}
+}
+
+// Test binding to a struct with multiple fields, each having a docopt tag.
+func TestBindingMultipleTaggedFields(t *testing.T) {
+	type MultiTaggedOptions struct {
+		Verbose bool   `docopt:"-v,--verbose"`  // Multiple tags for one field
+		Output  string `docopt:"--output-file"` // Tagged string field
+		Count   int    `docopt:"<count>"`       // Tagged positional int field
+		Mode    string `docopt:"--mode"`        // Tagged string option
+	}
+
+	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
+	usage := `Usage: mytool [-v|--verbose] --output-file=FILE --mode=MODE <count>`
+	argv := []string{
+		"--verbose",                    // Activate the boolean flag
+		"--output-file", "results.log", // Provide value for tagged string option
+		"--mode", "process", // Provide value for another tagged string option
+		"15", // Provide value for tagged positional argument
+	}
+
+	opts, err := testParser.ParseArgs(usage, argv, "")
+	if err != nil {
+		t.Fatalf("ParseArgs failed: %v", err)
+	}
+
+	expected := MultiTaggedOptions{
+		Verbose: true,
+		Output:  "results.log",
+		Count:   15,
+		Mode:    "process",
+	}
+
+	var actual MultiTaggedOptions
+	if err := opts.Bind(&actual); err != nil {
+		t.Fatalf("Bind failed: %v", err)
+	}
+
+	if !reflect.DeepEqual(actual, expected) {
+		t.Errorf("Bind result mismatch:\n Got: %#v\nWant: %#v", actual, expected)
+	}
+
+	// Test again using the short flag alternative
+	argvShort := []string{
+		"-v", // Use short flag
+		"--output-file", "short.log",
+		"--mode", "test",
+		"5",
+	}
+	optsShort, err := testParser.ParseArgs(usage, argvShort, "")
+	if err != nil {
+		t.Fatalf("ParseArgs (short flag) failed: %v", err)
+	}
+
+	expectedShort := MultiTaggedOptions{
+		Verbose: true,
+		Output:  "short.log",
+		Count:   5,
+		Mode:    "test",
+	}
+
+	var actualShort MultiTaggedOptions
+	if err := optsShort.Bind(&actualShort); err != nil {
+		t.Fatalf("Bind (short flag) failed: %v", err)
+	}
+
+	if !reflect.DeepEqual(actualShort, expectedShort) {
+		t.Errorf("Bind result mismatch (short flag):\n Got: %#v\nWant: %#v", actualShort, expectedShort)
+	}
+}
+
+// Test binding when optional arguments are not provided.
+func TestBindingOptionalArguments(t *testing.T) {
+	type OptionalConfig struct {
+		RequiredArg  string `docopt:"<req>"`
+		OptionalVal  string `docopt:"--opt-val"` // Optional value, defaults to ""
+		OptionalFlag bool   `docopt:"-f"`        // Optional flag, defaults to false
+		Count        int    `docopt:"--count"`   // Optional int, defaults to 0
+	}
+
+	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
+	usage := `Usage: mytool <req> [--opt-val=VAL] [-f] [--count=N]`
+
+	// Case 1: No optional arguments provided
+	argvMissing := []string{"required_value"}
+	optsMissing, err := testParser.ParseArgs(usage, argvMissing, "")
+	if err != nil {
+		t.Fatalf("ParseArgs (missing optionals) failed: %v", err)
+	}
+
+	expectedMissing := OptionalConfig{
+		RequiredArg:  "required_value",
+		OptionalVal:  "",    // Expect zero value for string
+		OptionalFlag: false, // Expect zero value for bool
+		Count:        0,     // Expect zero value for int
+	}
+
+	var actualMissing OptionalConfig
+	if err := optsMissing.Bind(&actualMissing); err != nil {
+		t.Fatalf("Bind (missing optionals) failed: %v", err)
+	}
+
+	if !reflect.DeepEqual(actualMissing, expectedMissing) {
+		t.Errorf("Bind result mismatch (missing optionals):\n Got: %#v\nWant: %#v", actualMissing, expectedMissing)
+	}
+
+	// Case 2: All optional arguments provided
+	argvPresent := []string{
+		"required_value",
+		"--opt-val", "some_value",
+		"-f",
+		"--count", "42",
+	}
+	optsPresent, err := testParser.ParseArgs(usage, argvPresent, "")
+	if err != nil {
+		t.Fatalf("ParseArgs (present optionals) failed: %v", err)
+	}
+
+	expectedPresent := OptionalConfig{
+		RequiredArg:  "required_value",
+		OptionalVal:  "some_value",
+		OptionalFlag: true,
+		Count:        42,
+	}
+
+	var actualPresent OptionalConfig
+	if err := optsPresent.Bind(&actualPresent); err != nil {
+		t.Fatalf("Bind (present optionals) failed: %v", err)
+	}
+
+	if !reflect.DeepEqual(actualPresent, expectedPresent) {
+		t.Errorf("Bind result mismatch (present optionals):\n Got: %#v\nWant: %#v", actualPresent, expectedPresent)
+	}
+}
+
+// Test binding to a struct field that is a pointer.
+func TestBindToPointerField(t *testing.T) {
+	type PointerConfig struct {
+		Name *string `docopt:"--name"`
+	}
+
+	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
+	usage := `Usage: mytool --name=NAME`
+	argv := []string{"--name", "test"}
+
+	opts, err := testParser.ParseArgs(usage, argv, "")
+	if err != nil {
+		t.Fatalf("ParseArgs failed: %v", err)
+	}
+
+	var actual PointerConfig
+	err = opts.Bind(&actual)
+	if err == nil {
+		t.Fatal("Expected an error when binding to a pointer field, but got nil")
+	}
+
+	expectedError := `A pointer field is not supported: "Name".`
+	if err.Error() != expectedError {
+		t.Errorf("Expected error %q, but got %q", expectedError, err.Error())
 	}
 }

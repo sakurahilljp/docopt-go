@@ -227,12 +227,13 @@ func (o Opts) BindOld(v interface{}) error {
 }
 
 func (o Opts) Bind(v interface{}) error {
+
 	val := reflect.ValueOf(v)
 
 	if val.Kind() != reflect.Ptr {
 		return newError("'v' argument is not pointer to struct type")
 	}
-	for val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
 	}
 	if val.Kind() != reflect.Struct {
@@ -246,7 +247,7 @@ func (o Opts) Bind(v interface{}) error {
 
 	for k, v := range o {
 
-		ok, err := o.assignTo(val, k, v)
+		ok, err := o.assingOptTo(k, v, val)
 		if !ok {
 			if k == "--help" || k == "--version" { // Don't require these to be mapped.
 				continue
@@ -261,28 +262,29 @@ func (o Opts) Bind(v interface{}) error {
 	return nil
 }
 
-func (o Opts) preCheck(sval reflect.Value) error {
+func (o Opts) preCheck(val reflect.Value) error {
 
-	for sval.Kind() == reflect.Ptr {
-		sval = sval.Elem()
+	for val.Kind() == reflect.Ptr {
+		val = val.Elem()
 	}
 
-	stype := sval.Type()
+	stype := val.Type()
 	for i := 0; i < stype.NumField(); i++ {
 		field := stype.Field(i)
 		if isUnexportedField(field) {
 			continue
 		}
 		if field.Anonymous {
-			err := o.preCheck(sval.Field(i))
+			// handle embedded field
+			err := o.preCheck(val.Field(i))
 			if err != nil {
 				return err
 			}
 			continue
 		}
 
-		zeroVal := reflect.Zero(sval.Field(i).Type())
-		if !reflect.DeepEqual(sval.Field(i).Interface(), zeroVal.Interface()) {
+		zeroVal := reflect.Zero(val.Field(i).Type())
+		if !reflect.DeepEqual(val.Field(i).Interface(), zeroVal.Interface()) {
 			return newError("%q field is non-zero, will be overwritten", field.Name)
 		}
 	}
@@ -290,11 +292,11 @@ func (o Opts) preCheck(sval reflect.Value) error {
 	return nil
 }
 
-func (o Opts) assignTo(sval reflect.Value, key string, val interface{}) (bool, error) {
+func (o Opts) assingOptTo(key string, val interface{}, sval reflect.Value) (bool, error) {
 
-	assign_value := func(sval reflect.Value, field reflect.StructField, key string, v interface{}) error {
+	assign_value := func(key string, v interface{}, fval reflect.Value, fname string) error {
 
-		if !reflect.DeepEqual(sval.Interface(), reflect.Zero(sval.Type()).Interface()) {
+		if !reflect.DeepEqual(fval.Interface(), reflect.Zero(fval.Type()).Interface()) {
 			// The struct's field is already non-zero (by our doing), so don't change it.
 			// This happens with comma separated tags, e.g. `docopt:"-h,--help"` which is a
 			// convenient way of checking if one of multiple boolean flags are set.
@@ -305,37 +307,34 @@ func (o Opts) assignTo(sval reflect.Value, key string, val interface{}) (bool, e
 		if !optVal.IsValid() {
 			return nil
 		}
-		if !sval.CanSet() {
-			return newError("%q field cannot be set", sval.Type().Name())
+		if !fval.CanSet() {
+			return newError("%q field cannot be set", fname)
 		}
+
+		if fval.Kind() == reflect.Ptr {
+			return newError("A pointer field is not supported: %q.", fname)
+		}
+
 		// Try to assign now if able. bool and string values should be assignable already.
-		if optVal.Type().AssignableTo(sval.Type()) {
-			sval.Set(optVal)
+		if optVal.Type().AssignableTo(fval.Type()) {
+			fval.Set(optVal)
 			return nil
 		}
 		// Try to convert the value and assign if able.
-		switch sval.Kind() {
+		switch fval.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			if x, err := o.Int(key); err == nil {
-				sval.SetInt(int64(x))
+				fval.SetInt(int64(x))
 				return nil
 			}
 		case reflect.Float32, reflect.Float64:
 			if x, err := o.Float64(key); err == nil {
-				sval.SetFloat(x)
+				fval.SetFloat(x)
 				return nil
 			}
 		}
-		// TODO: Something clever (recursive?) with non-string slices.
-		// case reflect.Slice:
-		// 	if optVal.Kind() == reflect.Slice {
-		// 		for i := 0; i < optVal.Len(); i++ {
-		// 			sliceVal := optVal.Index(i)
-		// 			fmt.Printf("%v", sliceVal)
-		// 		}
-		// 		fmt.Printf("\n")
-		// 	}
-		return newError("value of %q is not assignable to %q field", key, field.Name)
+
+		return newError("value of %q is not assignable to %q field", key, fname)
 
 	}
 
@@ -350,18 +349,20 @@ func (o Opts) assignTo(sval reflect.Value, key string, val interface{}) (bool, e
 			continue
 		}
 		if field.Anonymous {
-			ok, err := o.assignTo(sval.Field(i), key, val)
+			ok, err := o.assingOptTo(key, val, sval.Field(i))
 			if err != nil {
 				return false, err
 			}
 			if ok {
 				return true, nil
 			}
+
+			continue
 		}
 		tags := field.Tag.Get("docopt")
 		if tags == "" {
 			if guessUntaggedField(key) == field.Name {
-				if err := assign_value(sval.Field(i), field, key, val); err != nil {
+				if err := assign_value(key, val, sval.Field(i), field.Name); err != nil {
 					return false, err
 				}
 				return true, nil
@@ -369,7 +370,7 @@ func (o Opts) assignTo(sval reflect.Value, key string, val interface{}) (bool, e
 		} else {
 			for _, tag := range strings.Split(tags, ",") {
 				if tag == key {
-					if err := assign_value(sval.Field(i), field, key, val); err != nil {
+					if err := assign_value(key, val, sval.Field(i), field.Name); err != nil {
 						return false, err
 					}
 					return true, nil
