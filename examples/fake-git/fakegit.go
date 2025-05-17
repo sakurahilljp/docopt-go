@@ -6,7 +6,6 @@ import (
 	"os/exec"
 
 	"github.com/sakurahilljp/docopt-go"
-	"golang.org/x/xerrors"
 )
 
 func main() {
@@ -80,7 +79,7 @@ func runCommand(cmd string, args []string) (err error) {
 		return goRun("git.go", append(argv[1:], "--help"))
 	}
 
-	return xerrors.Errorf("%s is not a git command. See 'git help'", cmd)
+	return fmt.Errorf("%s is not a git command. See 'git help'", cmd)
 }
 
 func cmdAdd(argv []string) (err error) {

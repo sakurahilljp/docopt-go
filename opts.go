@@ -1,22 +1,21 @@
 package docopt
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 	"unicode"
-
-	"golang.org/x/xerrors"
 )
 
 func errKey(key string) error {
-	return xerrors.Errorf("no such key: %q", key)
+	return fmt.Errorf("no such key: %q", key)
 }
 func errType(key string) error {
-	return xerrors.Errorf("key: %q failed type conversion", key)
+	return fmt.Errorf("key: %q failed type conversion", key)
 }
 func errStrconv(key string, convErr error) error {
-	return xerrors.Errorf("key: %q failed type conversion: %s", key, convErr)
+	return fmt.Errorf("key: %q failed type conversion: %s", key, convErr)
 }
 
 // Opts is a map of command line options to their values, with some convenience
@@ -247,7 +246,7 @@ func (o Opts) BindEx(x interface{}) error {
 
 	for k, v := range o {
 
-		ok, err := o.assingOptTo(k, v, xval)
+		ok, err := o.assignOptTo(k, v, xval)
 		if !ok {
 			if k == "--help" || k == "--version" { // Don't require these to be mapped.
 				continue
@@ -292,7 +291,7 @@ func (o Opts) checkAllZero(xval reflect.Value) error {
 	return nil
 }
 
-func (o Opts) assingOptTo(key string, val interface{}, xval reflect.Value) (bool, error) {
+func (o Opts) assignOptTo(key string, val interface{}, xval reflect.Value) (bool, error) {
 
 	for xval.Kind() == reflect.Ptr {
 		return false, newError("xval cannot be ptr type")
@@ -374,7 +373,7 @@ func (o Opts) assingOptTo(key string, val interface{}, xval reflect.Value) (bool
 			continue
 		}
 		if field.Anonymous {
-			ok, err := o.assingOptTo(key, val, xval.Field(i))
+			ok, err := o.assignOptTo(key, val, xval.Field(i))
 			if err != nil {
 				return false, err
 			}
