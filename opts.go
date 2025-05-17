@@ -110,7 +110,7 @@ func (o Opts) Float64(key string) (f float64, err error) {
 //
 // Bind also handles conversion to bool, float, int or string types.
 
-func (o Opts) BindOld(v interface{}) error {
+func (o Opts) Bind(v interface{}) error {
 	structVal := reflect.ValueOf(v)
 	if structVal.Kind() != reflect.Ptr {
 		return newError("'v' argument is not pointer to struct type")
@@ -226,28 +226,28 @@ func (o Opts) BindOld(v interface{}) error {
 	return nil
 }
 
-func (o Opts) Bind(v interface{}) error {
+func (o Opts) BindEx(x interface{}) error {
 
-	val := reflect.ValueOf(v)
+	xval := reflect.ValueOf(x)
 
-	if val.Kind() != reflect.Ptr {
+	if xval.Kind() != reflect.Ptr {
 		return newError("'v' argument is not pointer to struct type")
 	}
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
+	if xval.Kind() == reflect.Ptr {
+		xval = xval.Elem()
 	}
-	if val.Kind() != reflect.Struct {
+	if xval.Kind() != reflect.Struct {
 		return newError("'v' argument is not pointer to struct type")
 	}
 
 	// Pre-check that option keys are mapped to fields and fields are zero valued, before populating them.
-	if err := o.preCheck(val); err != nil {
+	if err := o.checkAllZero(xval); err != nil {
 		return err
 	}
 
 	for k, v := range o {
 
-		ok, err := o.assingOptTo(k, v, val)
+		ok, err := o.assingOptTo(k, v, xval)
 		if !ok {
 			if k == "--help" || k == "--version" { // Don't require these to be mapped.
 				continue
@@ -262,29 +262,29 @@ func (o Opts) Bind(v interface{}) error {
 	return nil
 }
 
-func (o Opts) preCheck(val reflect.Value) error {
+func (o Opts) checkAllZero(xval reflect.Value) error {
 
-	for val.Kind() == reflect.Ptr {
-		val = val.Elem()
+	for xval.Kind() != reflect.Struct {
+		return newError("'vval' argument is struct type")
 	}
 
-	stype := val.Type()
-	for i := 0; i < stype.NumField(); i++ {
-		field := stype.Field(i)
+	xtype := xval.Type()
+	for i := 0; i < xtype.NumField(); i++ {
+		field := xtype.Field(i)
 		if isUnexportedField(field) {
 			continue
 		}
 		if field.Anonymous {
 			// handle embedded field
-			err := o.preCheck(val.Field(i))
+			err := o.checkAllZero(xval.Field(i))
 			if err != nil {
 				return err
 			}
 			continue
 		}
 
-		zeroVal := reflect.Zero(val.Field(i).Type())
-		if !reflect.DeepEqual(val.Field(i).Interface(), zeroVal.Interface()) {
+		zeroVal := reflect.Zero(xval.Field(i).Type())
+		if !reflect.DeepEqual(xval.Field(i).Interface(), zeroVal.Interface()) {
 			return newError("%q field is non-zero, will be overwritten", field.Name)
 		}
 	}
@@ -292,7 +292,11 @@ func (o Opts) preCheck(val reflect.Value) error {
 	return nil
 }
 
-func (o Opts) assingOptTo(key string, val interface{}, sval reflect.Value) (bool, error) {
+func (o Opts) assingOptTo(key string, val interface{}, xval reflect.Value) (bool, error) {
+
+	for xval.Kind() == reflect.Ptr {
+		return false, newError("xval cannot be ptr type")
+	}
 
 	assign_value := func(key string, v interface{}, fval reflect.Value, fname string) error {
 
@@ -311,25 +315,50 @@ func (o Opts) assingOptTo(key string, val interface{}, sval reflect.Value) (bool
 			return newError("%q field cannot be set", fname)
 		}
 
-		if fval.Kind() == reflect.Ptr {
-			return newError("A pointer field is not supported: %q.", fname)
-		}
-
 		// Try to assign now if able. bool and string values should be assignable already.
-		if optVal.Type().AssignableTo(fval.Type()) {
-			fval.Set(optVal)
+		ftype := fval.Type()
+		if fval.Kind() == reflect.Ptr {
+			ftype = ftype.Elem()
+		}
+		if optVal.Type().AssignableTo(ftype) {
+			if fval.Kind() == reflect.Ptr {
+				nval := reflect.New(fval.Type().Elem())
+				nval.Elem().Set(optVal)
+				fval.Set(nval)
+			} else {
+				fval.Set(optVal)
+			}
 			return nil
 		}
 		// Try to convert the value and assign if able.
-		switch fval.Kind() {
+		fkind := fval.Kind()
+		if fkind == reflect.Ptr {
+			fkind = fval.Type().Elem().Kind()
+		}
+		switch fkind {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			// Get value by key, and try to convert to integer.
 			if x, err := o.Int(key); err == nil {
-				fval.SetInt(int64(x))
+				if fval.Kind() == reflect.Ptr {
+					nval := reflect.New(fval.Type().Elem())
+					nval.Elem().SetInt(int64(x))
+					fval.Set(nval)
+				} else {
+					fval.SetInt(int64(x))
+				}
 				return nil
 			}
 		case reflect.Float32, reflect.Float64:
+			// Get value by key, and try to convert to float.
 			if x, err := o.Float64(key); err == nil {
-				fval.SetFloat(x)
+
+				if fval.Kind() == reflect.Ptr {
+					nval := reflect.New(fval.Type().Elem())
+					nval.Elem().SetFloat(x)
+					fval.Set(nval)
+				} else {
+					fval.SetFloat(x)
+				}
 				return nil
 			}
 		}
@@ -338,18 +367,14 @@ func (o Opts) assingOptTo(key string, val interface{}, sval reflect.Value) (bool
 
 	}
 
-	for sval.Kind() == reflect.Ptr {
-		sval = sval.Elem()
-	}
-
-	stype := sval.Type()
-	for i := 0; i < stype.NumField(); i++ {
-		field := stype.Field(i)
+	xtype := xval.Type()
+	for i := 0; i < xtype.NumField(); i++ {
+		field := xtype.Field(i)
 		if isUnexportedField(field) {
 			continue
 		}
 		if field.Anonymous {
-			ok, err := o.assingOptTo(key, val, sval.Field(i))
+			ok, err := o.assingOptTo(key, val, xval.Field(i))
 			if err != nil {
 				return false, err
 			}
@@ -362,7 +387,7 @@ func (o Opts) assingOptTo(key string, val interface{}, sval reflect.Value) (bool
 		tags := field.Tag.Get("docopt")
 		if tags == "" {
 			if guessUntaggedField(key) == field.Name {
-				if err := assign_value(key, val, sval.Field(i), field.Name); err != nil {
+				if err := assign_value(key, val, xval.Field(i), field.Name); err != nil {
 					return false, err
 				}
 				return true, nil
@@ -370,7 +395,7 @@ func (o Opts) assingOptTo(key string, val interface{}, sval reflect.Value) (bool
 		} else {
 			for _, tag := range strings.Split(tags, ",") {
 				if tag == key {
-					if err := assign_value(key, val, sval.Field(i), field.Name); err != nil {
+					if err := assign_value(key, val, xval.Field(i), field.Name); err != nil {
 						return false, err
 					}
 					return true, nil
