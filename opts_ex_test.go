@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestExOptsUsage(t *testing.T) {
+func TestBindEx_OptsUsage(t *testing.T) {
 	usage := "Usage: sleep <seconds> [--now]"
 	var opts Opts
 
@@ -33,7 +33,7 @@ func TestExOptsUsage(t *testing.T) {
 	}
 }
 
-func TestExOptsErrors(t *testing.T) {
+func TestBindEx_OptsErrors(t *testing.T) {
 	usage := "Usage: sleep <seconds> [--now]"
 	var opts Opts
 	var err error
@@ -84,7 +84,7 @@ func TestExOptsErrors(t *testing.T) {
 	}
 }
 
-func TestExOptsBind(t *testing.T) {
+func TestBindEx_OptsBind(t *testing.T) {
 	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
 	const usage = "Usage: prog [-h|--help] [-v] [-f] <command>"
 	for i, c := range []struct {
@@ -131,7 +131,7 @@ func TestExOptsBind(t *testing.T) {
 	}
 }
 
-func TestExBindErrors(t *testing.T) {
+func TestBindEx_BindErrors(t *testing.T) {
 	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
 	for i, tc := range []struct {
 		usage       string
@@ -191,7 +191,7 @@ func TestExBindErrors(t *testing.T) {
 	}
 }
 
-func TestExBindSuccess(t *testing.T) {
+func TestBindEx_BindSuccess(t *testing.T) {
 	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
 	for i, tc := range []struct {
 		usage   string
@@ -239,7 +239,7 @@ func TestExBindSuccess(t *testing.T) {
 	}
 }
 
-func TestExBindSimpleStruct(t *testing.T) {
+func TestBindEx_BindSimpleStruct(t *testing.T) {
 	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
 	opts, err := testParser.ParseArgs("Usage: prog [--number=X]", []string{"--number=123"}, "")
 	if err != nil {
@@ -254,7 +254,7 @@ func TestExBindSimpleStruct(t *testing.T) {
 	}
 }
 
-func TestExBindToStructWhichAlreadyHasValue(t *testing.T) {
+func TestBindEx_BindToStructWhichAlreadyHasValue(t *testing.T) {
 	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
 	opts, err := testParser.ParseArgs("Usage: prog [--number=X]", []string{"--number=123"}, "")
 	if err != nil {
@@ -266,7 +266,7 @@ func TestExBindToStructWhichAlreadyHasValue(t *testing.T) {
 	}
 }
 
-func TestExBindDashTag(t *testing.T) {
+func TestBindEx_BindDashTag(t *testing.T) {
 	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
 	opts, err := testParser.ParseArgs("Usage: prog [-]", []string{"-"}, "")
 	if err != nil {
@@ -283,7 +283,7 @@ func TestExBindDashTag(t *testing.T) {
 	}
 }
 
-func TestExBindDoubleDashTag(t *testing.T) {
+func TestBindEx_BindDoubleDashTag(t *testing.T) {
 	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
 	opts, err := testParser.ParseArgs("Usage: prog [--]", []string{"--"}, "")
 	if err != nil {
@@ -300,7 +300,7 @@ func TestExBindDoubleDashTag(t *testing.T) {
 	}
 }
 
-func TestExBindHyphenatedTags(t *testing.T) {
+func TestBindEx_BindHyphenatedTags(t *testing.T) {
 	var testParser = &Parser{HelpHandler: NoHelpHandler, SkipHelpFlags: true}
 	opts, err := testParser.ParseArgs("Usage: prog --opt-one=N --opt-two=N", []string{"--opt-one", "123", "--opt-two", "234"}, "")
 	if err != nil {
@@ -318,7 +318,7 @@ func TestExBindHyphenatedTags(t *testing.T) {
 	}
 }
 
-func TestExBindingAnonymousStruct(t *testing.T) {
+func TestBindEx_BindingAnonymousStruct(t *testing.T) {
 
 	type LogOption struct {
 		LogLevel string `docopt:"--loglevel"`
@@ -354,7 +354,7 @@ func TestExBindingAnonymousStruct(t *testing.T) {
 	}
 }
 
-func TestExBindingMultipleTags(t *testing.T) {
+func TestBindEx_BindingMultipleTags(t *testing.T) {
 
 	type MultipleTags struct {
 		Multi bool `docopt:"publish,pub"`
@@ -386,7 +386,7 @@ func TestExBindingMultipleTags(t *testing.T) {
 	}
 }
 
-func TestExBindingMultiLevelAnonymousStruct(t *testing.T) {
+func TestBindEx_BindingMultiLevelAnonymousStruct(t *testing.T) {
 
 	type NetworkOptions struct {
 		Port int `docopt:"--port"` // Tagged field in innermost struct
@@ -442,7 +442,7 @@ func TestExBindingMultiLevelAnonymousStruct(t *testing.T) {
 }
 
 // Test binding to a struct with multiple fields, each having a docopt tag.
-func TestExBindingMultipleTaggedFields(t *testing.T) {
+func TestBindEx_BindingMultipleTaggedFields(t *testing.T) {
 	type MultiTaggedOptions struct {
 		Verbose bool   `docopt:"-v,--verbose"`  // Multiple tags for one field
 		Output  string `docopt:"--output-file"` // Tagged string field
@@ -510,7 +510,7 @@ func TestExBindingMultipleTaggedFields(t *testing.T) {
 }
 
 // Test binding when optional arguments are not provided.
-func TestExBindingOptionalArguments(t *testing.T) {
+func TestBindEx_BindingOptionalArguments(t *testing.T) {
 	type OptionalConfig struct {
 		RequiredArg  string `docopt:"<req>"`
 		OptionalVal  string `docopt:"--opt-val"` // Optional value, defaults to ""
@@ -574,7 +574,7 @@ func TestExBindingOptionalArguments(t *testing.T) {
 }
 
 // Test binding to a struct field that is a pointer.
-func TestExBindToPointerField(t *testing.T) {
+func TestBindEx_BindToPointerField(t *testing.T) {
 	type PointerConfig struct {
 		Name   *string  `docopt:"--name"`
 		Id     *int     `docopt:"--id"`
